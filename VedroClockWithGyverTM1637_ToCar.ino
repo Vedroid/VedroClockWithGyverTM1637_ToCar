@@ -26,8 +26,6 @@
 #define CLOCK_EFFECT 1    // эффект перелистывания часов: 0 - обычный, 1 - прокрутка, 2 - скрутка
 #define MAX_BRIGHT 5      // яркость дисплея дневная (0 - 7)
 #define MIN_BRIGHT 1      // яркость дисплея ночная (0 - 7)
-#define  NIGHT_START 22   // час перехода на ночную подсветку (MIN_BRIGHT)
-#define NIGHT_END 7       // час перехода на дневную подсветку (MAX_BRIGHT)
 
 // ************ ПИНЫ ************
 
@@ -35,11 +33,11 @@
 #define DIO 11        // дисплей
 #define DOT 10        // дисплей
 
-
 #define ILL 9         // габариты
-#define VOLT A0       // вольтметр
 
 #define DATA 8        // DS18B20
+
+#define VOLT A0       // вольтметр
 
 #define BTN_SET 3
 #define BTN_UP 4      // сенсорная
@@ -52,7 +50,7 @@
 
 GTimer_ms halfsTimer(500);
 GTimer_ms blinkTimer(800);
-GTimer_ms timeoutTimer(15000);
+GTimer_ms timeoutTimer(10000);
 GTimer_ms tempTimer(3 * 1000);
 
 GyverTM1637 disp(CLK, DIO);
@@ -65,22 +63,18 @@ GButton btnUp(BTN_UP, LOW_PULL, NORM_OPEN);
 RTC_DS3231 rtc;
 
 boolean dotFlag, minuteFlag, blinkFlag, newTimeFlag;
-int8_t hrs = 21, mins = 55, secs;
+boolean changeFlag, illFlag, illState;
+int8_t hrs, mins, secs;
 int8_t mode = 0;
-boolean changeFlag;
-boolean illState, illFlag;
 
 float filtered_vin = 13.0;
-float k = 0.15;
+float k = 0.15;       // Коэффициент сглаживания (0-1)
 float R1 = 4453000.0; // resistance of R1
 float R2 = 1490000.0; // resistance of R2
 
 void setup() {
-  Serial.begin(9600);
   btnSet.setTimeout(400);
   btnSet.setDebounce(90);
-
-  //pinMode(6, OUTPUT);
 
   pinMode(DOT, OUTPUT);
   pinMode(ILL, INPUT);
@@ -103,34 +97,31 @@ void setup() {
 void loop() {
   changeBright();
   buttonsTick();
-  clockTick();    // считаем время
-  //settings();     // настройки
+  clockTick();
 
-  if (minuteFlag && mode == 0) {    // если новая минута и стоит режим часов
+  if (minuteFlag && mode == 0) {
     minuteFlag = false;
-    // выводим время
     printTime();
   }
 }
 
+// Верхняя точка между разрядами 2 и 3
 void displayDot(boolean status) {
   if (status) digitalWrite(DOT, HIGH);
   else digitalWrite(DOT, LOW);
 }
 
-// установка яркости
+// Установка яркости
 void changeBright(){
-  illState = digitalRead(ILL);   // читаем состояние кнопки с инверсией. 1 - нажата, 0 - нет
-  if (illState && !illFlag) {    // если нажата и была отпущена (illFlag 0)
-    illFlag = true;              // запомнили что нажата
+  illState = digitalRead(ILL);
+  if (illState && !illFlag) {
+    illFlag = true;
     disp.brightness(MIN_BRIGHT);
   }
-  if (!illState && illFlag) {    // если отпущена и была нажата (illFlag 1)
-    illFlag = false;             // запомнили что отпущена
+  if (!illState && illFlag) {
+    illFlag = false;
     disp.brightness(MAX_BRIGHT);
   }
-  //if (digitalRead(ILL)) disp.brightness(MIN_BRIGHT);
-  //else disp.brightness(MAX_BRIGHT);
 }
 
 void printTime(){
@@ -161,11 +152,16 @@ void buttonsTick() {
 
   if ((mode != 3) && btnSet.isHolded()) {
     mode = 3;
+    timeoutTimer.reset();
   }
 
   if (mode == 3) {
-    //if (timeoutTimer.isReady()) mode = 0;   // если сработал таймаут, вернёмся в режим 0
-    if (!newTimeFlag) newTimeFlag = true;   // флаг на изменение времени
+    if (timeoutTimer.isReady()){
+      mode = 0;
+      changeFlag = false;
+      disp.displayClock(hrs, mins);
+    }
+    if (!newTimeFlag) newTimeFlag = true;
     if (btnUp.isClick() || btnUp.isHold()) {
       if (!changeFlag) {
         mins++;
@@ -177,21 +173,11 @@ void buttonsTick() {
       }
       disp.displayClock(hrs, mins);
       delay(50);
-      //disp.displayClockScroll(hrs, mins,20);
-      timeoutTimer.reset();           // сбросить таймаут
+      timeoutTimer.reset();
     }
 
-    /*
     if (blinkTimer.isReady()) {
-      if (blinkFlag) blinkTimer.setInterval(800);
-      else blinkTimer.setInterval(200);
-      blinkFlag = !blinkFlag;
-    }
-    */
-
-    if (blinkTimer.isReady()) {
-      // прикол с перенастройкой таймера, чтобы цифры дольше горели
-      disp.point(1);
+      disp.point(true);
       if (blinkFlag) {
         blinkFlag = false;
         blinkTimer.setInterval(700);
@@ -199,7 +185,6 @@ void buttonsTick() {
       } else {
         blinkFlag = true;
         blinkTimer.setInterval(300);
-        //disp.clear();
         if (!changeFlag) {
           if(hrs/10 != 0) disp.display(0,(int8_t) (hrs/10));
           disp.display(1,(int8_t) (hrs%10));
@@ -216,15 +201,15 @@ void buttonsTick() {
   }
 
   if (mode == 3 && btnSet.isHolded()) {
-    //sendTime();
     mode = 0;
     secs = 0;
-    rtc.adjust(DateTime(2014, 1, 21, hrs, mins, 0));
+    rtc.adjust(DateTime(2020, 1, 1, hrs, mins, 0));
     minuteFlag = true;
   }
 
   if (mode == 3 && btnSet.isClick()) {
     changeFlag = !changeFlag;
+    timeoutTimer.reset();
   }
 }
 
@@ -233,23 +218,24 @@ void clockTick() {
     if (newTimeFlag) {
       newTimeFlag = false;
       secs = 0;
-      rtc.adjust(DateTime(2014, 1, 21, hrs, mins, 0)); // установка нового времени в RTC
+      rtc.adjust(DateTime(2020, 1, 1, hrs, mins, 0));
     }
 
     dotFlag = !dotFlag;
     
     if (mode == 0) {
-      disp.point(dotFlag);                 // выкл/выкл точки
-      //disp.displayClock(hrs, mins);
+      disp.point(dotFlag);
     }
 
     if (mode == 1) {
       if (tempTimer.isReady()) {
         disp.point(false);
         sensor.requestTemp();
+
         delay(20);
         int temp = (sensor.getTemp() * 10.0);
         delay(20);
+
         disp.displayByte(0,0x58);
         disp.display(1,temp/100);
         disp.display(2,temp/10%10);
@@ -259,9 +245,8 @@ void clockTick() {
     }
 
     if (mode == 2) {
-      // read the value at analog input
       filtered_vin += (((analogRead(VOLT) * 5.0) / 1024.0) / (R2/(R1+R2)) - filtered_vin) * k;
-      int volt = filtered_vin*10;
+      int volt = filtered_vin * 10;
 
       disp.displayByte(0,0x1c);
       disp.display(1,volt/100);
