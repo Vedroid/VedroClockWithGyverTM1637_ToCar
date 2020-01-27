@@ -11,15 +11,12 @@
 */
 
 #include <Arduino.h>
+#include <Wire.h>
+#include "RTClib.h"
 #include "GyverTimer.h"
 #include "GyverTM1637.h"
 #include "GyverButton.h"
-#include <CyberLib.h>
 #include "microDS18B20.h"
-
-#include "EEPROM.h"
-#include <Wire.h>
-#include "RTClib.h"
 
 // *************************** НАСТРОЙКИ ***************************
 
