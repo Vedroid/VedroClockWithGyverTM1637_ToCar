@@ -26,18 +26,18 @@
 
 // ************ ПИНЫ ************
 
-#define CLK 12        // дисплей
-#define DIO 11        // дисплей
-#define DOT 10        // дисплей
+#define DOT 12        // дисплей
+#define CLK 11        // дисплей
+#define DIO 10        // дисплей
 
 #define ILL 9         // габариты
 
 #define DATA 8        // DS18B20
 
-#define VOLT A0       // вольтметр
+#define BTN_UP 7      // сенсорная
+#define BTN_SET 6
 
-#define BTN_SET 3
-#define BTN_UP 4      // сенсорная
+#define VOLT A0       // вольтметр
 
 // SDA A4   // RTC
 // SCL A5   // RTC
@@ -67,7 +67,7 @@ int8_t mode = 0;
 float filtered_vin = 13.0;
 float k = 0.15;       // Коэффициент сглаживания (0-1)
 float R1 = 4453000.0; // resistance of R1
-float R2 = 1490000.0; // resistance of R2
+float R2 = 1480000.0; // resistance of R2
 
 void setup() {
   btnSet.setTimeout(400);
@@ -242,7 +242,7 @@ void clockTick() {
     }
 
     if (mode == 2) {
-      filtered_vin += (((analogRead(VOLT) * 5.0) / 1024.0) / (R2/(R1+R2)) - filtered_vin) * k;
+      filtered_vin += (((analogRead(VOLT) * 5.05) / 1024.0) / (R2/(R1+R2)) - filtered_vin) * k;
       int volt = filtered_vin * 10;
 
       disp.displayByte(0,0x1c);
