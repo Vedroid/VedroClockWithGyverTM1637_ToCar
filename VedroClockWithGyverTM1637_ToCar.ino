@@ -48,6 +48,7 @@
 GTimer_ms halfsTimer(500);
 GTimer_ms blinkTimer(800);
 GTimer_ms timeoutTimer(10000);
+GTimer_ms changeTimer(4000);
 GTimer_ms tempTimer(3 * 1000);
 
 GyverTM1637 disp(CLK, DIO);
@@ -62,10 +63,10 @@ RTC_DS3231 rtc;
 boolean dotFlag, minuteFlag, blinkFlag, newTimeFlag;
 boolean changeFlag, illFlag, illState;
 int8_t hrs, mins, secs;
-int8_t mode = 0;
+int8_t mode = 2;  // 0 часы, 1 температура, 2 вольтметр, 3 настройка часов
 
-float filtered_vin = 13.0;
-float k = 0.15;       // Коэффициент сглаживания (0-1)
+float filtered_vin = 12.0;
+float k = 0.3;       // Коэффициент сглаживания (0-1)
 float R1 = 4453000.0; // resistance of R1
 float R2 = 1480000.0; // resistance of R2
 
@@ -88,6 +89,13 @@ void setup() {
   hrs = now.hour();
 
   disp.brightness(MAX_BRIGHT);
+  
+  while (true){
+    clockTick();
+    if(changeTimer.isReady()) mode--;
+    if (mode <= 0) break;
+  }
+  displayDot(false);
   disp.displayClock(hrs, mins);
 }
 
